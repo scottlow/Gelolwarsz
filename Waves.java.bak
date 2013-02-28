@@ -1,0 +1,165 @@
+/** I just added some proximity detection (nasty I know, but it was the first solution that popped into my head)
+    so we shouldn't have enemies spawning within 50 px (set by BOUNDARY) of the player. Also, I just added a wave2
+    in to test the corner spawn thing. Seems to work alright.
+    
+    One thing though, I was thinking that the waves should switch after killing a certain amount of enemies, as
+    completely clearing the screen when enemies are spawning fast is pretty hard to do.
+    
+    - Scott
+**/
+import java.awt.*;
+
+public class Waves {
+    private QuadTreeNode  qt;
+    private EntityManager bm;
+    private Player        p;
+    private int           sw;
+    private int           sh;
+    private Graphics2D    g;
+
+    private int    currentWave;
+    private int    ticks = 100;
+    private boolean showwave = false;
+    private long   delta;
+
+    private static int BOUNDARY = 50;
+
+    private int aliensAdded;
+    private int alienCounter;
+    private long deltaR;
+
+    public Waves(){
+        currentWave = 2;
+        delta = 0;
+        aliensAdded = 0;
+        alienCounter = 0;
+        deltaR = 0;
+    }
+
+    public void init() {
+        bm = Resources.get().getEntityManager();
+        qt = Resources.get().getQuadTree();
+        sw = Resources.get().getWidth();
+        sh = Resources.get().getHeight();
+        p = (Resources.get()).getPlayer();
+    }
+
+    public String getCurrentWave(){
+        return Integer.toString(currentWave);
+    }
+    
+    public String getAdded() {
+        return Integer.toString(aliensAdded);
+    } // getCount
+
+    public void update( long d ){
+        int score;
+        
+        score = p.getScore();
+
+        delta += d;
+
+        wave1();
+
+        if(score > 200) {
+          wave2();
+        }
+        delta -= deltaR;
+        deltaR = 0;
+    }
+
+    private void wave1(){
+        if(delta >= 1500) {
+            addRandPosAlien();
+            addRandPosAlien1();
+            deltaR += 1500;
+        } // if
+    }
+
+    private void wave2(){
+        if(aliensAdded <= 25 && delta > 750){
+            addAlienCornerSpawn();
+            deltaR += 750;
+        }
+    }
+
+    private void wave3(){
+        if( ( aliensAdded >= 25 )){
+            aliensAdded = 0;
+            alienCounter = 0;
+            currentWave = 1;
+            return;
+        }
+
+        while( delta > 1500 && aliensAdded <= 25){
+            addAlien2CornerSpawn();
+            delta = 0;
+        }
+    }
+
+    private void addRandPosAlien(){
+        double iX = Math.random() * sw;
+        double iY = Math.random() * sh;
+        for( ; ; ) {
+            if((iX > (p.getPosX() - BOUNDARY) && iX < (p.getPosX() + BOUNDARY)) || (iY > (p.getPosY() - BOUNDARY) && (iY < p.getPosY() + BOUNDARY))) {
+                iX = Math.random() * sw;
+                iY = Math.random() * sh;
+                continue;
+            } else {
+                break;
+            }
+        }
+        bm.addEntity( new Alien((int)(iX), (int)(iY) ) );
+        aliensAdded++;
+        alienCounter++;
+    }
+
+    private void addRandPosAlien1(){
+        double iX = Math.random() * sw;
+        double iY = Math.random() * sh;
+        for( ; ; ) {
+            if((iX > (p.getPosX() - BOUNDARY) && iX < (p.getPosX() + BOUNDARY)) || (iY > (p.getPosY() - BOUNDARY) && (iY < p.getPosY() + BOUNDARY))) {
+                iX = Math.random() * sw;
+                iY = Math.random() * sh;
+                continue;
+            } else {
+                break;
+            }
+        }
+        bm.addEntity( new Alien1((int)(iX), (int)(iY) ) );
+        aliensAdded++;
+        alienCounter++;
+    }
+
+    private void addAlienCornerSpawn(){
+        bm.addEntity( new Alien(40, 40));
+        bm.addEntity( new Alien(40, sh - 40 - 32));
+        bm.addEntity( new Alien(sw - 40 - 32,  sh - 40 - 32));
+        bm.addEntity( new Alien(760, sh - 40 - 32));
+        aliensAdded += 4;
+        alienCounter += 4;
+    }
+    
+    private void addAlien2CornerSpawn(){
+        bm.addEntity( new Alien2(40, 40, false));
+        bm.addEntity( new Alien2(40, sh - 40 - 32, false));
+        bm.addEntity( new Alien2(sw - 40 - 32,  sh - 40 - 32, false));
+        bm.addEntity( new Alien2(760, sh - 40 - 32, false));
+        aliensAdded += 4;
+        alienCounter += 4;
+    }
+    
+    public void draw() {
+        if( showwave ) {
+            if ( ticks-- > 0 ) {
+                g.drawString("WAVE " + currentWave, 300, 200);
+            } else {
+                showwave = false;
+            }
+        }
+    }
+
+    public void alienRemoval(){
+        alienCounter --;
+    }
+} //Levels

@@ -1,0 +1,213 @@
+/////////////////////////////////////////////////////////
+//
+//  GEOLOLWARZ - ScreenManager.java
+//  Dylan Johnston
+//  Stephen Drake
+//  Scott Low
+//
+//  Manages screen states.
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.*;
+import java.awt.geom.*;
+
+class ScreenManager extends Canvas {
+    private Game           gm;// Our game.
+    private QMenu          m; // Menu/etc.
+    private Graphics2D     g; // Graphics!
+    private InputHandler   i; // Input class.
+    private Resources      r; // Static references to all things we use.
+    private JFrame         c; // frame we draw on
+    private JPanel         p; // panel
+    private boolean        fs = false; // fullscreen
+    private boolean        quit = false;
+    private boolean        pause = false; // quit?
+
+    private BufferStrategy bs;
+
+    private long delta;
+    private long timer = 0;
+    private int frames = 0;  // How many frames were drawn.
+
+    private int sw = 640;    // screen width
+    private int sh = 480;    // screen height
+    private int state   = 0; // screen state.
+    
+    // SCREEN STATES!
+    static int NOTHING = 0;  // Blank Screen.
+    static int GAME    = 1;  // Game
+    static int MENU    = 2;  // Menu Screen.
+
+    public void dscenter( Graphics g, String s, int w, int y ) {
+        g.drawString( s, (w/2) - (g.getFontMetrics().stringWidth( s )/2), y );
+    }
+
+    // Constructor
+    public ScreenManager() {
+        c = new JFrame( "GEOLOLWARSZ!" );
+        p = (JPanel)c.getContentPane();
+        r = new Resources();
+
+        setBounds( 0, 0, sw, sh );
+        setIgnoreRepaint( true );
+
+        p.setPreferredSize( new Dimension( sw, sh ) );
+        p.setLayout( null );
+        p.add( this );
+
+        // don't draw window if we're going fullscreen.
+        if ( fs ) c.setUndecorated( true ); else c.pack();
+
+        c.setResizable( false );
+        c.setVisible( true );
+        c.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
+        
+        requestFocus();
+
+        createBufferStrategy( 2 );
+        bs = getBufferStrategy();
+        g = (Graphics2D)bs.getDrawGraphics();
+
+        // Set display mode and tell the graphics device to give us fullscreen.
+        if ( fs ) {
+            GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+            DisplayMode    dm = new DisplayMode( sw, sh, 32, DisplayMode.REFRESH_RATE_UNKNOWN);
+            gd.setFullScreenWindow(c);
+            gd.setDisplayMode(dm);
+        }
+
+        // set up listeners and start listening!
+        i = new InputHandler();
+        addMouseListener( i );
+        addMouseMotionListener( i );
+        addKeyListener( i );
+
+        r.setResolution( sw, sh );
+        r.addImage( "loading", "resources/images/loading.png" );
+
+        g.setColor( new Color( 50, 50, 50 ) );
+        g.fillRect( 0, 0, r.getWidth(), r.getHeight() );
+        g.drawImage( ((Sprite)r.getResource( "loading" )).getImage(), (sw/2) - 155 , (sh/2) - 32, this );
+        g.setColor( Color.white );
+        bs.show();
+
+        r.addFont( "silkscreen", "resources/fonts/slkscr.ttf", 8 );
+        r.addFont( "bverdana", "verdana", Font.BOLD, 11 );
+        g.setFont( ((Font)r.getResource( "bverdana" )) );
+        dscenter( g, "Loaded: Fonts", sw, 320 );
+        bs.show();
+
+        r.addImage( "logo", "resources/images/logo.png" );
+        r.addImage( "tmpCursor", "resources/images/cursor.png" );
+        r.addImage( "tmpExplosion", "resources/images/asplode.png" );
+        r.addImage( "tmpPowerup1", "resources/images/pu1.png" );
+        r.addImage( "blackhole", "resources/images/blackhole.png" );
+        r.addImage( "life", "resources/images/life.png" );
+        
+        r.addImage( "tmpAlien3_big", "resources/images/a3_b.png" );
+        r.addImage( "tmpAlien3_small", "resources/images/a3_s.png" );
+
+
+        dscenter( g, "Loaded: Images", sw, 330 );
+        bs.show();
+
+        //r.addRotated360Image( "swirl", "resources/images/swirl.png" );
+        r.addRotated360Image( "tmpBullet", "resources/images/bullet.png" );
+        r.addRotated360Image( "tmpChar", "resources/images/char.png" );
+        r.addRotated360Image( "tmpAlien", "resources/images/a1.png" );
+        r.addRotated360Image( "tmpAlien1", "resources/images/a2.png" );
+        dscenter( g, "Loaded: Loaded Rotated Images", sw, 340 );
+        bs.show();
+        
+        dscenter( g, "Loaded: IMAGINARY SOUNDS", sw, 350 );
+        bs.show();
+
+        // initialize game.
+        gm = new Game( g, i, this, r, sw, sh );
+        m  = new QMenu( 15, r.getHeight() - 47, 12 );
+
+        state = MENU;
+
+        // Count FPS and calc delta.
+        int fps = 0;
+        long current = 0;
+        long last = (System.nanoTime() / 1000000) + 1000;
+
+        while( !quit ) {
+            delta = System.nanoTime() / 1000000 - current;
+            timer += delta;
+            current = System.nanoTime() / 1000000;
+
+            // update FPS count.
+            if ( current > last ) {
+                frames = fps;
+                fps = 0;
+                last = current + 1000;
+            }
+
+            if ( !pause) {
+                update();
+                draw();
+            }
+
+            fps++;
+
+            // Do we want to exit?!
+            if ( timer > 200 ) {
+                if ( i.isKeyDown( KeyEvent.VK_P ) ) {
+                    pause = pause ? false : true;
+                    timer = 0;
+                }
+            }
+        }
+
+
+        // Sometimes if we exit we're still in fullscreen. this forces an update.
+        if ( fs )
+            GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().setFullScreenWindow(null);
+
+        System.exit(0);
+    }
+
+    // x - state to change to.
+    // sets the screen state of this.
+    public void setState( int x ) { state = x; }
+    
+    public int getState() {
+        return state;
+    }
+
+    // closes the game
+    private void quit() {
+        System.exit(0);
+    }
+
+    // updates objects, entities, worlds, mows lawns and makes trees grow.
+    private void update() {
+        if ( state == MENU )
+            m.update( delta, this);
+        if ( state == GAME )
+            gm.update( delta, frames );
+    }
+    
+    // makes things look DEEEEEEEEECENT.
+    private void draw() {
+        if ( state == MENU ) {
+            g.setFont( ((Font)r.getResource( "bverdana" )) );
+            m.draw( g );
+        }
+        if ( state == GAME ) {
+            g.setFont( ((Font)r.getResource( "silkscreen" )) );
+            gm.draw( g, delta, frames );
+        } // if
+
+        bs.show();
+    }
+
+    // wat do? how wurk?
+    public static void main( String args[] ) {
+        new ScreenManager();
+    }
+}
